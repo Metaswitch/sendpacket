@@ -1,3 +1,6 @@
+#![macro_use]
+#![allow(unused_macros)]
+
 #[macro_use]
 extern crate derive_new;
 extern crate ipnetwork;
@@ -9,6 +12,50 @@ use std::num::ParseIntError;
 use std::fs;
 use std::io::Read;
 use std::path::Path;
+
+
+///
+/// Macros
+///
+macro_rules! ip {
+  ( $( $k:ident=$v:expr ),* ) => {{
+    Ip {
+      $(
+        $k: $v.into(),
+      )*
+    }
+  }};
+}
+
+macro_rules! mpls {
+  ( $( $k:ident=$v:expr ),* ) => {{
+    MPLS {
+      $(
+        $k: $v.into(),
+      )*
+    }
+  }};
+}
+
+macro_rules! tcp {
+  () => {{ Tcp {} }};
+}
+
+macro_rules! mac {
+  ( $( $K:ident=$v:expr ),* ) => {{
+    Mac {
+      $(
+        $K: $v.into(),
+      )*
+      ..Default::default()
+    }
+  }};
+}
+
+
+///
+/// Type system
+///
 
 pub trait InsideL3 {}
 
@@ -100,4 +147,43 @@ impl Default for Mac {
 
         Mac::from_str(&macaddr.trim()).unwrap()
     }
+}
+
+
+///
+/// Tests
+///
+
+#[cfg(test)]
+mod tests {
+  use Ip;
+  use Tcp;
+  use Mac;
+
+  #[test]
+  fn macro_ip_works() {
+    assert_eq!(Ip {dst: "hello".into()}, ip!(dst="hello"));
+  }
+
+  #[test]
+  fn macro_tcp_works() {
+    assert_eq!(Tcp {}, tcp!());
+  }
+
+  #[test]
+  fn macro_mac_works() {
+    assert_eq!(Mac {address: [0; 6]}, mac!(address=[0; 6]));
+  }
+
+  #[test]
+  fn macro_default_mac_works() {
+    let mac: Mac = Default::default();
+    assert_eq!(mac, mac!());
+  }
+
+  #[test]
+  fn macro_tcp_ip_div_fv() {
+    assert_eq!(Ip {dst: "hello".into()} / Tcp {},
+               ip!(dst="hello")/tcp!());
+  }
 }
