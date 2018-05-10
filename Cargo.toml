@@ -3,4 +3,9 @@ name = "hack12"
 version = "0.1.0"
 authors = ["Wojciech Kozlowski <wojciech.kozlowski@metaswitch.com>"]
 
+[lib]
+name = "lib_hack12"
+path = "src/lib.rs"
+
 [dependencies]
+
