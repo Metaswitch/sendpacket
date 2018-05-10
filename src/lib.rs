@@ -1,20 +1,49 @@
-use std::ops::Div;
+#[macro_use]
+extern crate derive_new;
+extern crate ipnetwork;
+extern crate pnet;
 
+use std::ops::Div;
 use std::str::FromStr;
 use std::num::ParseIntError;
 use std::fs;
 use std::io::Read;
 use std::path::Path;
 
+pub trait InsideL3 {}
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct L2 {
+    src_mac: Mac,
+    dest_mac: Mac,
+    vlan: Vec<()>,
+}
+
+impl InsideL3 for L2 {}
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct MPLS<Inner: InsideL3> {
+    label: String,
+    inner: Inner,
+}
+
+impl<Inner: InsideL3> InsideL3 for MPLS<Inner> {}
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct L3<Inner: InsideL3> {
+    ip: ipnetwork::IpNetwork,
+    inner: Inner,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ip {
     dst: String
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct Tcp;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct IpOverTcp {
     dst: String,
 }
@@ -29,19 +58,7 @@ impl Div<Tcp> for Ip {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        assert_eq!(IpOverTcp { dst: "blah".to_string() }, Ip { dst: "blah".to_string()} / Tcp )
-    }
-}
-
-
-
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Mac {
     address: [u8; 6]
 }
