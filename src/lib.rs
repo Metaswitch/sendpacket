@@ -247,20 +247,6 @@ payload_div!(L2);
 payload_div!(L3);
 payload_div!(L3Over<Tcp>);
 
-
-
-// pub trait InsideL3 {}
-
-
-//impl<Inner: InsideL3> InsideL3 for MPLS<Inner> {}
-
-// #[derive(Clone, Debug, PartialEq, Eq, new)]
-// pub struct L3<Inner: InsideL3> {
-//     ip: ipnetwork::IpNetwork,
-//     inner: Inner,
-// }
-
-
 impl FromStr for Mac {
     type Err = ParseIntError;
 
