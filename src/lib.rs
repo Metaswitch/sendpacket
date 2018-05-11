@@ -153,7 +153,7 @@ pub struct L2 {
 }
 
 impl PackageHeader for Ether {
-    fn build_header(&mut self, payload: &[u8]) -> Vec<u8> {
+    fn build_header(&self, payload: &[u8]) -> Vec<u8> {
         let ether_buffer_len = payload.len() + 38; // 42 if with 802.1Q tags
         let mut ether_buffer = vec![0u8; ether_buffer_len];
         let mut ether_packet = MutableEthernetPacket::new(&mut ether_buffer).unwrap();
@@ -171,14 +171,14 @@ impl PackageHeader for Ether {
                                                   self.dst_mac.address[4],
                                                   self.dst_mac.address[5]));
 
-        ether_packet.set_ethertype(EtherTypes::Ipv4);
-
+//        ether_packet.set_ethertype(EtherTypes::);
+        ether_packet.set_payload(payload);
         ether_packet.packet().to_vec()
     }
 }
 
 impl PackageHeader for L2 {
-    fn build_header(&mut self, payload: &[u8]) -> Vec<u8> {
+    fn build_header(&self, payload: &[u8]) -> Vec<u8> {
         let l2_packet: Vec<u8> = vec![];
         // Insert RLC function here for L2 packets
 
@@ -213,7 +213,7 @@ pub struct L3 {
 }
 
 impl PackageHeader for L3 {
-    fn build_header(&mut self, payload: &[u8]) -> Vec<u8> {
+    fn build_header(&self, payload: &[u8]) -> Vec<u8> {
         let l3_packet: Vec<u8> = vec![];
         // Insert RLC function here for L3 packets
 
@@ -258,7 +258,7 @@ pub struct L3Over<T: Transport> {
 }
 
 impl PackageHeader for L3Over<Tcp> {
-    fn build_header(&mut self, payload: &[u8]) -> Vec<u8> {
+    fn build_header(&self, payload: &[u8]) -> Vec<u8> {
         let l3_over_tcp_packet: Vec<u8> = vec![];
         // Insert RLC function here for L3 over TCP packets
 
@@ -275,7 +275,7 @@ impl<T: Transport> Div<T> for L3 {
 }
 
 pub trait PackageHeader {
-    fn build_header(&mut self, payload: &[u8]) -> Vec<u8>;
+    fn build_header(&self, payload: &[u8]) -> Vec<u8>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, new)]
@@ -285,7 +285,7 @@ pub struct Package<H: PackageHeader> {
 }
 
 impl<H: PackageHeader> Package<H> {
-    fn build_packet(&mut self) -> Vec<u8> {
+    pub fn build_packet(&self) -> Vec<u8> {
         self.header.build_header(&self.payload.payload)
     }
 }
