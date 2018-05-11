@@ -13,7 +13,7 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 use std::marker::PhantomData;
-
+use pnet::datalink;
 
 ///
 /// Macros
@@ -143,22 +143,13 @@ impl FromStr for Mac {
 
 impl Default for Mac {
     fn default() -> Mac {
-        let net = Path::new("/sys/class/net");
-        let entry = fs::read_dir(net).expect("Error");
-
-        let ifaces = entry.filter_map(|p| p.ok())
-                          .map(|p| p.path().file_name().expect("Error").to_os_string())
-                          .filter_map(|s| s.into_string().ok())
-                          .collect::<Vec<String>>();
-        println!("Available interfaces: {:?}", ifaces);
-
         // TODO: currently just takes the first network interface it sees. What should it actually use???
-        let iface = net.join(ifaces[0].as_str()).join("address");
-        let mut f = fs::File::open(iface).expect("Failed");
-        let mut macaddr = String::new();
-        f.read_to_string(&mut macaddr).expect("Error");
-
-        Mac::from_str(&macaddr.trim()).unwrap()
+        let interface = datalink::interfaces()
+            .into_iter()
+            .next()
+            .expect("Could not find any interfaces");
+        let mac_addr = interface.mac.unwrap();
+        Mac {address: [mac_addr.0, mac_addr.1, mac_addr.2, mac_addr.3, mac_addr.4, mac_addr.5]}
     }
 }
 
