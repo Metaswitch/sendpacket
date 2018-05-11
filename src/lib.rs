@@ -152,6 +152,22 @@ pub struct L2 {
     mpls_labels: Vec<MPLS>,
 }
 
+impl PackageHeader for Ether {
+    fn build_header(&mut self, payload: &[u8]) -> Vec<u8> {
+        // Insert RLC function here for L2 packets
+        vec![]
+    }
+}
+
+impl PackageHeader for L2 {
+    fn build_header(&mut self, payload: &[u8]) -> Vec<u8> {
+        let l2_packet: Vec<u8> = vec![];
+        // Insert RLC function here for L2 packets
+
+        self.ether.build_header(&l2_packet)
+    }
+}
+
 impl Div<MPLS> for Ether {
     type Output = L2;
 
@@ -176,6 +192,15 @@ impl Div<MPLS> for L2 {
 pub struct L3 {
     l2: L2,
     ip: Ip,
+}
+
+impl PackageHeader for L3 {
+    fn build_header(&mut self, payload: &[u8]) -> Vec<u8> {
+        let l3_packet: Vec<u8> = vec![];
+        // Insert RLC function here for L3 packets
+
+        self.l2.build_header(&l3_packet)
+    }
 }
 
 impl Div<Ip> for L2 {
@@ -214,6 +239,15 @@ pub struct L3Over<T: Transport> {
     transport: T,
 }
 
+impl PackageHeader for L3Over<Tcp> {
+    fn build_header(&mut self, payload: &[u8]) -> Vec<u8> {
+        let l3_over_tcp_packet: Vec<u8> = vec![];
+        // Insert RLC function here for L3 over TCP packets
+
+        self.l3.build_header(&l3_over_tcp_packet)
+    }
+}
+
 impl<T: Transport> Div<T> for L3 {
     type Output = L3Over<T>;
 
@@ -222,7 +256,9 @@ impl<T: Transport> Div<T> for L3 {
     }
 }
 
-pub trait PackageHeader {}
+pub trait PackageHeader {
+    fn build_header(&mut self, payload: &[u8]) -> Vec<u8>;
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct Package<H: PackageHeader> {
@@ -230,10 +266,14 @@ pub struct Package<H: PackageHeader> {
     payload: Payload,
 }
 
+impl<H: PackageHeader> Package<H> {
+    fn build_packet(&mut self) -> Vec<u8> {
+        self.header.build_header(&self.payload.payload)
+    }
+}
+
 macro_rules! payload_div {
     ($header:ty) => {
-        impl PackageHeader for $header {}
-
         impl Div<Payload> for $header {
             type Output = Package<Self>;
 
