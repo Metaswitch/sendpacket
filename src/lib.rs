@@ -12,7 +12,6 @@ use std::num::ParseIntError;
 use std::fs;
 use std::io::Read;
 use std::path::Path;
-use std::marker::PhantomData;
 
 use ipnetwork::IpNetwork;
 
@@ -82,6 +81,24 @@ macro_rules! ether {
     }};
 }
 
+#[macro_export]
+macro_rules! payload {
+    ( $( $v:expr ),* ) => {{
+        Payload::new(
+            $(
+                $v.into(),
+            )*
+        )
+    }};
+
+    ( $( $k:ident=$v:expr ),* ) => {{
+        Payload {
+            $(
+                $k: $v.into(),
+            )*
+        }
+    }};
+}
 
 ///
 /// Basic type system
@@ -124,7 +141,7 @@ pub struct Tcp {
 
 #[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct Payload {
-    pub payload: String,
+    pub payload: Vec<u8>,
 }
 
 trait EtherTypeable {
@@ -216,14 +233,14 @@ impl Transport for Tcp {}
 #[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct L3Over<T: Transport> {
     l3: L3,
-    #[new(default)] _phantom: PhantomData<T>,
+    transport: T,
 }
 
 impl<T: Transport> Div<T> for L3 {
     type Output = L3Over<T>;
 
-    fn div(self, _rhs: T) -> Self::Output {
-        L3Over::new(self)
+    fn div(self, rhs: T) -> Self::Output {
+        L3Over::new(self, rhs)
     }
 }
 
@@ -256,16 +273,35 @@ impl L3Over<Tcp> {
 }
 
 // pub trait InsideL3 {}
+pub trait PackageHeader {}
 
+#[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct Package<H: PackageHeader> {
+    header: H,
+    payload: Payload,
+}
 
-//impl<Inner: InsideL3> InsideL3 for MPLS<Inner> {}
+macro_rules! payload_div {
+    ($header:ty) => {
+        impl PackageHeader for $header {}
 
-// #[derive(Clone, Debug, PartialEq, Eq, new)]
-// pub struct L3<Inner: InsideL3> {
-//     ip: ipnetwork::IpNetwork,
-//     inner: Inner,
-// }
+        impl Div<Payload> for $header {
+            type Output = Package<Self>;
 
+            fn div(self, rhs: Payload) -> Self::Output {
+                Package {
+                    payload: rhs,
+                    header: self,
+                }
+            }
+        }
+    }
+}
+
+payload_div!(Ether);
+payload_div!(L2);
+payload_div!(L3);
+payload_div!(L3Over<Tcp>);
 
 impl FromStr for Mac {
     type Err = ParseIntError;
@@ -316,20 +352,20 @@ impl Default for Mac {
 /// Tests
 ///
 
-#[cfg(test)]
 mod tests {
+  use Ether;
   use Ip;
   use Tcp;
   use Mac;
 
   #[test]
   fn macro_ip_works() {
-    assert_eq!(Ip {dst: "hello".into()}, ip!(dst="hello"));
+    assert_eq!(Ip {src: "".into(), dst: "hello".into()}, ip!(src="", dst="hello"));
   }
 
   #[test]
   fn macro_tcp_works() {
-    assert_eq!(Tcp {}, tcp!());
+    assert_eq!(Tcp {dport: 0, sport: 1}, tcp!(dport=0u16, sport=1u16));
   }
 
   #[test]
@@ -345,7 +381,7 @@ mod tests {
 
   #[test]
   fn macro_tcp_ip_div_fv() {
-    assert_eq!(Ip {dst: "hello".into()} / Tcp {},
-               ip!(dst="hello")/tcp!());
+    assert_eq!(Ether {src_mac: [10,1,1,1,1,1].into(), dst_mac: [10,1,1,1,1,2].into()} / Ip {src: "".into(), dst: "hello".into()} / Tcp {dport: 0u16, sport: 1u16},
+               ether!(src_mac = [10,1,1,1,1,1], dst_mac = [10,1,1,1,1,2]) / ip!(src="", dst="hello")/tcp!(dport=0u16, sport=1u16));
   }
 }
