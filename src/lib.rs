@@ -13,6 +13,11 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
+use pnet::datalink::{Channel, NetworkInterface, MacAddr};
+use pnet::packet::ethernet::MutableEthernetPacket;
+use pnet::packet::ethernet::EtherTypes;
+use pnet::packet::ipv4::MutableIpv4Packet;
+use pnet::packet::{Packet, MutablePacket};
 
 ///
 /// Macros
@@ -329,3 +334,28 @@ mod tests {
                ip!(dst="hello")/tcp!());
   }
 }
+
+mod builder {
+    use L2;
+    use Ip;
+    use Tcp;
+
+    fn build_ethernet_pkt(ether: L2, payload: [u8; 1024]) -> [u8; 1024] {
+        // TODO implement!
+        panic!("Not implemented");
+        payload
+    }
+
+    fn build_ip_pkt(ip: Ip, ethernet_pkt: [u8; 1024]) -> [u8; 1024] {
+        // TODO implement!
+        panic!("Not implemented");
+        ethernet_pkt
+    }
+
+    fn build_tcp_pkt(tcp: Tcp, ip_pkt: [u8; 1024]) -> [u8; 1024] {
+        // TODO implement!
+        panic!("Not implemented");
+        ip_pkt
+    }
+}
+
