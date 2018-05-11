@@ -15,6 +15,7 @@ use pnet::packet::ethernet::MutableEthernetPacket;
 use pnet::packet::ip::{self, IpNextHeaderProtocol, IpNextHeaderProtocols};
 use pnet::packet::ipv4;
 use pnet::packet::ipv4::MutableIpv4Packet;
+use pnet::packet::udp::{ipv4_checksum, MutableUdpPacket};
 
 use std::fs;
 use std::io::Read;
@@ -327,8 +328,25 @@ impl PackageHeader<()> for L3Over<Udp> {
         let l3_over_udp_packet: Vec<u8> = vec![];
 
 
+        let udp_len = payload.len() + 8;
+        let mut udp_buffer = vec![0u8; udp_len];
+        let mut udp_packet = MutableUdpPacket::new(&mut udp_buffer).unwrap();
 
-        self.l3.build_header(&l3_over_udp_packet, IpNextHeaderProtocols::Udp)
+        udp_packet.set_source(self.transport.src_port);
+        udp_packet.set_destination(self.transport.dst_port);
+        udp_packet.set_length(udp_len as u16);
+        udp_packet.set_payload(payload);
+
+        // Checksum is optional for UDP
+        //    let checksum = {
+        //       ipv4_checksum(upd_packet.to_immutable(), self.l3.ip.src.parse().unwrap(), self.l3.ip.dst.parse().unwrap())
+        //       let imm_packet = l3_packet.to_immutable();
+        //       ipv4::checksum(&imm_packet)
+        //    };
+
+        udp_packet.set_checksum(0);
+
+        self.l3.build_header(&udp_packet.packet(), IpNextHeaderProtocols::Udp)
     }
 }
 
