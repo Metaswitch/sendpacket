@@ -64,9 +64,9 @@ macro_rules! mac {
 }
 
 #[macro_export]
-macro_rules! l2 {
+macro_rules! ether {
     ( $( $k:ident=$v:expr ),* ) => {{
-        L2 {
+        Ether {
             $(
                 $k: $v.into(),
             )*
@@ -76,68 +76,141 @@ macro_rules! l2 {
 
 
 ///
-/// Type system
+/// Basic type system
 ///
 
-pub trait InsideL3 {}
-
-#[derive(Clone, Debug, PartialEq, Eq, new)]
-pub struct L2 {
-    src_mac: Mac,
-    dest_mac: Mac,
-    vlan: Vec<()>,
-}
-
-impl InsideL3 for L2 {}
-
-#[derive(Clone, Debug, PartialEq, Eq, new)]
-pub struct MPLS<Inner: InsideL3> {
-    label: String,
-    inner: Inner,
-}
-
-impl<Inner: InsideL3> InsideL3 for MPLS<Inner> {}
-
-#[derive(Clone, Debug, PartialEq, Eq, new)]
-pub struct L3<Inner: InsideL3> {
-    ip: ipnetwork::IpNetwork,
-    inner: Inner,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Ip {
-    src: String,
-    dst: String
-}
-
-pub trait Transport {}
-
-#[derive(Clone, Debug, PartialEq, Eq, new)]
-pub struct Tcp {
-    dport: u16,
-    sport: u16,
-}
-
-impl Transport for Tcp {}
-
-#[derive(Clone, Debug, PartialEq, Eq, new)]
-pub struct IpOver<T: Transport> {
-    dst: String,
-    #[new(default)] _phantom: PhantomData<T>,
-}
-
-impl<T: Transport> Div<T> for Ip {
-    type Output = IpOver<T>;
-
-    fn div(self, _rhs: T) -> Self::Output {
-        IpOver::new(self.dst)
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Mac {
     address: [u8; 6]
 }
+
+impl From<[u8; 6]> for Mac{
+    fn from(address: [u8; 6]) -> Self {
+        Mac { address }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct Ether {
+    pub src_mac: Mac,
+    pub dst_mac: Mac,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct MPLS {
+    pub label: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ip {
+    pub src: String,
+    pub dst: String
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct Tcp {
+    pub dport: u16,
+    pub sport: u16,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct Payload {
+    pub payload: String,
+}
+
+
+///
+/// Encapsulation types
+///
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct L2 {
+    ether: Ether,
+    mpls_labels: Vec<MPLS>,
+}
+
+impl Div<MPLS> for Ether {
+    type Output = L2;
+
+    fn div(self, rhs: MPLS) -> Self::Output {
+        L2{
+            ether: self,
+            mpls_labels: vec![rhs],
+        }
+    }
+}
+
+impl Div<MPLS> for L2 {
+    type Output = L2;
+
+    fn div(mut self, rhs: MPLS) -> Self::Output {
+        self.mpls_labels.push(rhs);
+        self
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct L3 {
+    l2: L2,
+    ip: Ip,
+}
+
+impl Div<Ip> for L2 {
+    type Output = L3;
+
+    fn div(self, rhs: Ip) -> Self::Output {
+        L3{
+            l2: self,
+            ip: rhs,
+        }
+    }
+}
+
+
+impl Div<Ip> for Ether {
+    type Output = L3;
+
+    fn div(self, rhs: Ip) -> Self::Output {
+        L3 {
+            l2: L2{
+                    ether: self,
+                    mpls_labels: vec![],
+                },
+            ip: rhs,
+        }
+    }
+}
+
+pub trait Transport {}
+
+impl Transport for Tcp {}
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct L3Over<T: Transport> {
+    l3: L3,
+    #[new(default)] _phantom: PhantomData<T>,
+}
+
+impl<T: Transport> Div<T> for L3 {
+    type Output = L3Over<T>;
+
+    fn div(self, _rhs: T) -> Self::Output {
+        L3Over::new(self)
+    }
+}
+
+// pub trait InsideL3 {}
+
+
+//impl<Inner: InsideL3> InsideL3 for MPLS<Inner> {}
+
+// #[derive(Clone, Debug, PartialEq, Eq, new)]
+// pub struct L3<Inner: InsideL3> {
+//     ip: ipnetwork::IpNetwork,
+//     inner: Inner,
+// }
+
 
 impl FromStr for Mac {
     type Err = ParseIntError;
