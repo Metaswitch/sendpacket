@@ -154,8 +154,26 @@ pub struct L2 {
 
 impl PackageHeader for Ether {
     fn build_header(&mut self, payload: &[u8]) -> Vec<u8> {
-        // Insert RLC function here for L2 packets
-        vec![]
+        let ether_buffer_len = payload.len() + 38; // 42 if with 802.1Q tags
+        let mut ether_buffer = vec![0u8; ether_buffer_len];
+        let mut ether_packet = MutableEthernetPacket::new(&mut ether_buffer).unwrap();
+
+        ether_packet.set_source(MacAddr::new(self.src_mac.address[0],
+                                             self.src_mac.address[1],
+                                             self.src_mac.address[2],
+                                             self.src_mac.address[3],
+                                             self.src_mac.address[4],
+                                             self.src_mac.address[5]));
+        ether_packet.set_destination(MacAddr::new(self.dst_mac.address[0],
+                                                  self.dst_mac.address[1],
+                                                  self.dst_mac.address[2],
+                                                  self.dst_mac.address[3],
+                                                  self.dst_mac.address[4],
+                                                  self.dst_mac.address[5]));
+
+        ether_packet.set_ethertype(EtherTypes::Ipv4);
+
+        ether_packet.packet().to_vec()
     }
 }
 
