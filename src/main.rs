@@ -1,9 +1,9 @@
 #[macro_use]
-extern crate lib_hack12;
+extern crate lib_sendpacket;
 extern crate pnet;
 extern crate pnet_datalink;
 
-use lib_hack12::*;
+use lib_sendpacket::*;
 
 use std::net::{Ipv4Addr, AddrParseError};
 
