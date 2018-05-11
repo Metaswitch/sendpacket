@@ -1,6 +1,6 @@
 # sendpacket
 
-`sendpacket` is a high-level rust library for low-level networkign that makes use of macros to provide a "kwargs-like" interface a-la python's dpkt/scapy.
+`sendpacket` is a high-level rust library for low-level networking that makes use of macros to provide a "kwargs-like" interface a-la python's dpkt/scapy.
 
 With `sendpacket` you can construct and modify arbitrary packet data and attempt to send it via a NIC, which uses `libpnet` under the covers.
 
