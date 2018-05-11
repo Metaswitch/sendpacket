@@ -9,6 +9,7 @@ use std::num::ParseIntError;
 use std::fs;
 use std::io::Read;
 use std::path::Path;
+use std::marker::PhantomData;
 
 pub trait InsideL3 {}
 
@@ -40,21 +41,24 @@ pub struct Ip {
     dst: String
 }
 
+pub trait Transport {}
+
 #[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct Tcp;
 
+impl Transport for Tcp {}
+
 #[derive(Clone, Debug, PartialEq, Eq, new)]
-pub struct IpOverTcp {
+pub struct IpOver<T: Transport> {
     dst: String,
+    #[new(default)] _phantom: PhantomData<T>,
 }
 
-impl Div<Tcp> for Ip {
-    type Output = IpOverTcp;
+impl<T: Transport> Div<T> for Ip {
+    type Output = IpOver<T>;
 
-    fn div(self, _rhs: Tcp) -> Self::Output {
-        IpOverTcp {
-            dst: self.dst
-        }
+    fn div(self, _rhs: T) -> Self::Output {
+        IpOver::new(self.dst)
     }
 }
 
