@@ -12,7 +12,6 @@ use std::num::ParseIntError;
 use std::fs;
 use std::io::Read;
 use std::path::Path;
-use std::marker::PhantomData;
 
 
 ///
@@ -74,6 +73,24 @@ macro_rules! ether {
     }};
 }
 
+#[macro_export]
+macro_rules! payload {
+    ( $( $v:expr ),* ) => {{
+        Payload::new(
+            $(
+                $v.into(),
+            )*
+        )
+    }};
+
+    ( $( $k:ident=$v:expr ),* ) => {{
+        Payload {
+            $(
+                $k: $v.into(),
+            )*
+        }
+    }};
+}
 
 ///
 /// Basic type system
@@ -116,7 +133,7 @@ pub struct Tcp {
 
 #[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct Payload {
-    pub payload: String,
+    pub payload: Vec<u8>,
 }
 
 
@@ -189,16 +206,48 @@ impl Transport for Tcp {}
 #[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct L3Over<T: Transport> {
     l3: L3,
-    #[new(default)] _phantom: PhantomData<T>,
+    transport: T,
 }
 
 impl<T: Transport> Div<T> for L3 {
     type Output = L3Over<T>;
 
-    fn div(self, _rhs: T) -> Self::Output {
-        L3Over::new(self)
+    fn div(self, rhs: T) -> Self::Output {
+        L3Over::new(self, rhs)
     }
 }
+
+pub trait PackageHeader {}
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct Package<H: PackageHeader> {
+    header: H,
+    payload: Payload,
+}
+
+macro_rules! payload_div {
+    ($header:ty) => {
+        impl PackageHeader for $header {}
+
+        impl Div<Payload> for $header {
+            type Output = Package<Self>;
+
+            fn div(self, rhs: Payload) -> Self::Output {
+                Package {
+                    payload: rhs,
+                    header: self,
+                }
+            }
+        }
+    }
+}
+
+payload_div!(Ether);
+payload_div!(L2);
+payload_div!(L3);
+payload_div!(L3Over<Tcp>);
+
+
 
 // pub trait InsideL3 {}
 
