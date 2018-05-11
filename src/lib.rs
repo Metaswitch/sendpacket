@@ -22,7 +22,6 @@ use std::num::ParseIntError;
 use std::ops::Div;
 use std::path::Path;
 use std::str::FromStr;
-use std::marker::PhantomData;
 
 ///
 /// Macros
@@ -328,17 +327,16 @@ pub trait PackageHeader<ExtraInfo> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, new)]
-pub struct Package<Extra, H: PackageHeader<Extra>> {
+pub struct Package<H: PackageHeader<()>> {
     header: H,
     payload: Payload,
-    #[new(default)] _phantom: PhantomData<Extra>,
 }
 
 pub trait BuildPacket {
     fn build_packet(&self) -> Vec<u8>;
 }
 
-impl<H: PackageHeader<()>> BuildPacket for Package<(), H> {
+impl<H: PackageHeader<()>> BuildPacket for Package<H> {
     fn build_packet(&self) -> Vec<u8> {
         self.header.build_header(&self.payload.payload, ())
     }
@@ -347,13 +345,12 @@ impl<H: PackageHeader<()>> BuildPacket for Package<(), H> {
 macro_rules! payload_div {
     ($header:ty) => {
         impl Div<Payload> for $header {
-            type Output = Package<(), Self>;
+            type Output = Package<Self>;
 
             fn div(self, rhs: Payload) -> Self::Output {
                 Package {
                     payload: rhs,
                     header: self,
-                    _phantom: PhantomData,
                 }
             }
         }
