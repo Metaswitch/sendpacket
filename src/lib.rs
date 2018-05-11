@@ -14,6 +14,14 @@ use std::io::Read;
 use std::path::Path;
 use std::marker::PhantomData;
 
+use ipnetwork::IpNetwork;
+
+use pnet::packet::ethernet::MutableEthernetPacket;
+use pnet::packet::ipv4;
+use pnet::packet::ethernet::EtherTypes;
+use pnet::packet::{Packet, MutablePacket};
+use pnet::packet::arp::{ArpHardwareTypes, ArpOperations, ArpOperation};
+
 
 ///
 /// Macros
@@ -119,6 +127,25 @@ pub struct Payload {
     pub payload: String,
 }
 
+trait EtherTypeable {
+    fn ether_type(&self) -> EtherType;
+}
+
+impl EtherTypeable for MPLS {
+    fn ether_type(&self) -> EtherType {
+        EtherTypes::Mpls
+    }
+}
+
+impl EtherTypeable for Ip {
+    fn ether_type(&self) -> EtherType {
+        match self.src.parse::<IpNetwork>().unwrap() {
+            IpNetwork::V4(_) => EtherTypes::Ipv4,
+            IpNetwork::V6(_) => EtherTypes::Ipv6,
+        }
+    }
+}
+
 
 ///
 /// Encapsulation types
@@ -153,7 +180,7 @@ impl Div<MPLS> for L2 {
 #[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct L3 {
     l2: L2,
-    ip: Ip,
+    ip: Ip, // if you allow more types here, they must implement EtherTypeable
 }
 
 impl Div<Ip> for L2 {
@@ -197,6 +224,34 @@ impl<T: Transport> Div<T> for L3 {
 
     fn div(self, _rhs: T) -> Self::Output {
         L3Over::new(self)
+    }
+}
+
+impl L3Over<Tcp> {
+    fn mutable_packet(&self, payload: Vec<u8>) -> MutablePacket {
+        let mut ethernet_buffer = [0u8; 42];
+        let mut ethernet_packet = MutableEthernetPacket::new(&mut ethernet_buffer).unwrap();
+
+        ethernet_packet.set_destination(self.l3.l2.ether.src_mac);
+        ethernet_packet.set_source(self.l3.l2.ether.dst_mac);
+        ethernet_packet.set_ethertype(self.l3.ip.ether_type());
+
+
+
+        let mut arp_buffer = [0u8; 28];
+        let mut arp_packet = MutableArpPacket::new(&mut arp_buffer).unwrap();
+
+        arp_packet.set_hardware_type(ArpHardwareTypes::Ethernet);
+        arp_packet.set_protocol_type(EtherTypes::Ipv4);
+        arp_packet.set_hw_addr_len(6);
+        arp_packet.set_proto_addr_len(4);
+        arp_packet.set_operation(arp_operation);
+        arp_packet.set_sender_hw_addr(source_mac);
+        arp_packet.set_sender_proto_addr(source_ip);
+        arp_packet.set_target_hw_addr(target_mac);
+        arp_packet.set_target_proto_addr(target_ip);
+
+        ethernet_packet.set_payload(arp_packet.packet_mut())
     }
 }
 
@@ -246,7 +301,7 @@ impl Default for Mac {
                           .collect::<Vec<String>>();
         println!("Available interfaces: {:?}", ifaces);
 
-        // TODO: currently just takes the first network interface it sees. What should it actually use???
+        // TODO: currently just takes the first network interface it sees... What should it actually use???
         let iface = net.join(ifaces[0].as_str()).join("address");
         let mut f = fs::File::open(iface).expect("Failed");
         let mut macaddr = String::new();
