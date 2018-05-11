@@ -6,13 +6,21 @@ extern crate derive_new;
 extern crate ipnetwork;
 extern crate pnet;
 
-use std::ops::Div;
-use std::str::FromStr;
-use std::num::ParseIntError;
+use ipnetwork::IpNetwork;
+use pnet::packet::{MutablePacket, Packet};
+use pnet::packet::arp::{ArpHardwareTypes, ArpOperation, ArpOperations};
+use pnet::packet::ethernet::{EtherType, EtherTypes};
+use pnet::packet::ethernet::MutableEthernetPacket;
+use pnet::packet::ip;
+use pnet::packet::ipv4;
+use pnet::datalink::{Channel, NetworkInterface, MacAddr};
 use std::fs;
 use std::io::Read;
+use std::num::ParseIntError;
+use std::ops::Div;
 use std::path::Path;
-
+use pnet::datalink;
+use std::str::FromStr;
 
 ///
 /// Macros
@@ -136,6 +144,25 @@ pub struct Payload {
     pub payload: Vec<u8>,
 }
 
+trait EtherTypeable {
+    fn ether_type(&self) -> EtherType;
+}
+
+impl EtherTypeable for MPLS {
+    fn ether_type(&self) -> EtherType {
+        EtherTypes::Mpls
+    }
+}
+
+impl EtherTypeable for Ip {
+    fn ether_type(&self) -> EtherType {
+        match self.src.parse::<IpNetwork>().unwrap() {
+            IpNetwork::V4(_) => EtherTypes::Ipv4,
+            IpNetwork::V6(_) => EtherTypes::Ipv6,
+        }
+    }
+}
+
 
 ///
 /// Encapsulation types
@@ -145,6 +172,30 @@ pub struct Payload {
 pub struct L2 {
     ether: Ether,
     mpls_labels: Vec<MPLS>,
+}
+
+impl PackageHeader for Ether {
+    fn build_header(&self, payload: &[u8]) -> Vec<u8> {
+        let ether_buffer_len = payload.len() + 38; // 42 if with 802.1Q tags
+        let mut ether_buffer = vec![0u8; ether_buffer_len];
+        let mut ether_packet = MutableEthernetPacket::new(&mut ether_buffer).unwrap();
+
+        ether_packet.set_source(self.src_mac.to_mac_addr());
+        ether_packet.set_destination(self.dst_mac.to_mac_addr());
+
+//        ether_packet.set_ethertype(EtherTypes::);
+        ether_packet.set_payload(payload);
+        ether_packet.packet().to_vec()
+    }
+}
+
+impl PackageHeader for L2 {
+    fn build_header(&self, payload: &[u8]) -> Vec<u8> {
+        let l2_packet: Vec<u8> = vec![];
+        // Insert RLC function here for L2 packets
+
+        self.ether.build_header(&l2_packet)
+    }
 }
 
 impl Div<MPLS> for Ether {
@@ -170,7 +221,16 @@ impl Div<MPLS> for L2 {
 #[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct L3 {
     l2: L2,
-    ip: Ip,
+    ip: Ip, // if you allow more types here, they must implement EtherTypeable
+}
+
+impl PackageHeader for L3 {
+    fn build_header(&self, payload: &[u8]) -> Vec<u8> {
+        let l3_packet: Vec<u8> = vec![];
+        // Insert RLC function here for L3 packets
+
+        self.l2.build_header(&l3_packet)
+    }
 }
 
 impl Div<Ip> for L2 {
@@ -209,6 +269,15 @@ pub struct L3Over<T: Transport> {
     transport: T,
 }
 
+impl PackageHeader for L3Over<Tcp> {
+    fn build_header(&self, payload: &[u8]) -> Vec<u8> {
+        let l3_over_tcp_packet: Vec<u8> = vec![];
+        // Insert RLC function here for L3 over TCP packets
+
+        self.l3.build_header(&l3_over_tcp_packet)
+    }
+}
+
 impl<T: Transport> Div<T> for L3 {
     type Output = L3Over<T>;
 
@@ -217,7 +286,9 @@ impl<T: Transport> Div<T> for L3 {
     }
 }
 
-pub trait PackageHeader {}
+pub trait PackageHeader {
+    fn build_header(&self, payload: &[u8]) -> Vec<u8>;
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct Package<H: PackageHeader> {
@@ -225,10 +296,40 @@ pub struct Package<H: PackageHeader> {
     payload: Payload,
 }
 
+impl<H: PackageHeader> Package<H> {
+    pub fn build_packet(&self) -> Vec<u8> {
+        self.header.build_header(&self.payload.payload)
+    }
+
+    pub fn send(&self, interface: &NetworkInterface) {
+        let (mut tx, mut rx) = match pnet::datalink::channel(&interface, Default::default()) {
+            Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
+            Ok(_) => panic!("Unknown channel type"),
+            Err(e) => panic!("Error happened {}", e),
+        };
+        tx.send_to(&self.build_packet(), None);
+    }
+
+    pub fn recv(&self, interface: &NetworkInterface) -> Vec<u8> {
+        let (mut tx, mut rx) = match pnet::datalink::channel(&interface, Default::default()) {
+            Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
+            Ok(_) => panic!("Unknown channel type"),
+            Err(e) => panic!("Error happened {}", e),
+        };
+
+        match rx.next() {
+            Ok(packet) => {
+                packet.to_vec()
+            },
+            Err(e) => {
+                panic!("Error receiving packet: {}", e);
+            }
+        }
+    }
+}
+
 macro_rules! payload_div {
     ($header:ty) => {
-        impl PackageHeader for $header {}
-
         impl Div<Payload> for $header {
             type Output = Package<Self>;
 
@@ -272,37 +373,38 @@ impl FromStr for Mac {
 
 impl Default for Mac {
     fn default() -> Mac {
-        let net = Path::new("/sys/class/net");
-        let entry = fs::read_dir(net).expect("Error");
-
-        let ifaces = entry.filter_map(|p| p.ok())
-                          .map(|p| p.path().file_name().expect("Error").to_os_string())
-                          .filter_map(|s| s.into_string().ok())
-                          .collect::<Vec<String>>();
-        println!("Available interfaces: {:?}", ifaces);
-
         // TODO: currently just takes the first network interface it sees. What should it actually use???
-        let iface = net.join(ifaces[0].as_str()).join("address");
-        let mut f = fs::File::open(iface).expect("Failed");
-        let mut macaddr = String::new();
-        f.read_to_string(&mut macaddr).expect("Error");
-
-        Mac::from_str(&macaddr.trim()).unwrap()
+        let interface = datalink::interfaces()
+            .into_iter()
+            .next()
+            .expect("Could not find any interfaces");
+        let mac_addr = interface.mac.unwrap();
+        Mac {address: [mac_addr.0, mac_addr.1, mac_addr.2, mac_addr.3, mac_addr.4, mac_addr.5]}
     }
 }
 
+impl Mac {
+    fn to_mac_addr(&self) -> MacAddr {
+        MacAddr::new(self.address[0],
+                     self.address[1],
+                     self.address[2],
+                     self.address[3],
+                     self.address[4],
+                     self.address[5])
+    }
+}
 
 ///
 /// Tests
 ///
 
 mod tests {
-  use Ether;
-  use Ip;
-  use Tcp;
-  use Mac;
+    use Ether;
+    use Ip;
+    use Mac;
+    use Tcp;
 
-  #[test]
+    #[test]
   fn macro_ip_works() {
     assert_eq!(Ip {src: "".into(), dst: "hello".into()}, ip!(src="", dst="hello"));
   }
@@ -329,3 +431,4 @@ mod tests {
                ether!(src_mac = [10,1,1,1,1,1], dst_mac = [10,1,1,1,1,2]) / ip!(src="", dst="hello")/tcp!(dport=0u16, sport=1u16));
   }
 }
+
