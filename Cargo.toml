@@ -1,6 +1,8 @@
 [package]
 name = "sendpacket"
 version = "0.1.0"
+description = "High-level library for interacting with low-level network data."
+license = "MIT OR Apache-2.0"
 authors = [
   "Alex Lloyd <alex.lloyd@metaswitch.com>",
   "Blake Hawkins <blake.hawkins@metaswitch.com>",
