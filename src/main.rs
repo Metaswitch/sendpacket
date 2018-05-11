@@ -6,6 +6,7 @@ extern crate pnet_datalink;
 use lib_sendpacket::*;
 
 use std::net::{Ipv4Addr, AddrParseError};
+use std::env;
 
 use pnet::datalink::{Channel, NetworkInterface, MacAddr};
 use pnet::packet::ethernet::MutableEthernetPacket;
@@ -17,22 +18,18 @@ fn main() {
 //    let p = ether!(src_mac = [10,1,1,1,1,1], dst_mac = [10,1,1,1,1,2]) / mpls!(label = 77u32) / ip!(dst = "127.0.0.1", src = "10.8.0.1") / tcp!(dport = 85u16, sport = 10u16) / payload!(vec![1,2,3,4]);
 //    println!("{:#?}", p);
 
-    let interface = pnet::datalink::interfaces()
-        .into_iter()
-        .find(|iface| iface.name == "enp0s8")
-        .unwrap();
+    let if_name = env::args().nth(1)
+        .expect("Usage: ./hack12 <interface name>");
 
-    let source_mac = interface.mac_address();
-    let dest_mac = MacAddr::new(0x08, 0x00, 0x27, 0x63, 0x9d, 0xc2);
-
-    let packet = ether!(src_mac = [10, 1, 1, 1, 1, 1], dst_mac = [10, 1, 1, 1, 1, 2]) / payload!("hello".to_string().into_bytes());
+    let session = DataLinkSession::new(&if_name);
+    let packet = ether!(src_mac = [10,1,1,1,1,1], dst_mac = [10,1,1,1,1,2]) / payload!("hello".to_string().into_bytes());
 
     println!("Made packet {:#?}", packet);
 
-    packet.send(&interface);
+    packet.send(&session);
     println!("Sent");
 
-    let rcv_pkt = packet.recv(&interface);
+    let rcv_pkt = packet.recv(&session);
     println!("Received: {:?}", rcv_pkt);
 }
 

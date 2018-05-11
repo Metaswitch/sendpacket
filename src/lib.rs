@@ -7,18 +7,12 @@ extern crate ipnetwork;
 extern crate pnet;
 
 use ipnetwork::IpNetwork;
-use pnet::packet::{MutablePacket, Packet};
-use pnet::packet::arp::{ArpHardwareTypes, ArpOperation, ArpOperations};
+use pnet::packet::Packet;
 use pnet::packet::ethernet::{EtherType, EtherTypes};
 use pnet::packet::ethernet::MutableEthernetPacket;
-use pnet::packet::ip;
-use pnet::packet::ipv4;
-use pnet::datalink::{Channel, NetworkInterface, MacAddr};
-use std::fs;
-use std::io::Read;
+use pnet::datalink::{Channel, NetworkInterface, MacAddr, DataLinkReceiver, DataLinkSender};
 use std::num::ParseIntError;
 use std::ops::Div;
-use std::path::Path;
 use pnet::datalink;
 use std::str::FromStr;
 
@@ -163,6 +157,30 @@ impl EtherTypeable for Ip {
     }
 }
 
+pub struct DataLinkSession {
+    interface: NetworkInterface,
+}
+
+impl DataLinkSession {
+    pub fn new(if_name: &String) -> DataLinkSession {
+        let interface = DataLinkSession::get_interface(if_name);
+
+        DataLinkSession {
+            interface: interface,
+        }
+    }
+
+    fn get_interface(if_name: &String) -> NetworkInterface {
+        pnet::datalink::interfaces()
+            .into_iter()
+            .find(|iface| iface.name == *if_name)
+            .expect("Could not open specified interface")
+    }
+
+    pub fn local_mac_address(&self) -> Mac {
+        Mac::from_mac_addr(self.interface.mac.unwrap())
+    }
+}
 
 ///
 /// Encapsulation types
@@ -301,8 +319,8 @@ impl<H: PackageHeader> Package<H> {
         self.header.build_header(&self.payload.payload)
     }
 
-    pub fn send(&self, interface: &NetworkInterface) {
-        let (mut tx, mut rx) = match pnet::datalink::channel(&interface, Default::default()) {
+    pub fn send(&self, session: &DataLinkSession) {
+        let (mut tx, mut rx) = match pnet::datalink::channel(&session.interface, Default::default()) {
             Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
             Ok(_) => panic!("Unknown channel type"),
             Err(e) => panic!("Error happened {}", e),
@@ -310,8 +328,8 @@ impl<H: PackageHeader> Package<H> {
         tx.send_to(&self.build_packet(), None);
     }
 
-    pub fn recv(&self, interface: &NetworkInterface) -> Vec<u8> {
-        let (mut tx, mut rx) = match pnet::datalink::channel(&interface, Default::default()) {
+    pub fn recv(&self, session: &DataLinkSession) -> Vec<u8> {
+        let (mut tx, mut rx) = match pnet::datalink::channel(&session.interface, Default::default()) {
             Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
             Ok(_) => panic!("Unknown channel type"),
             Err(e) => panic!("Error happened {}", e),
@@ -391,6 +409,17 @@ impl Mac {
                      self.address[3],
                      self.address[4],
                      self.address[5])
+    }
+
+    fn from_mac_addr(mac_addr: MacAddr) -> Mac {
+        Mac {
+            address: [mac_addr.0,
+                       mac_addr.1,
+                       mac_addr.2,
+                       mac_addr.3,
+                       mac_addr.4,
+                       mac_addr.5]
+        }
     }
 }
 
