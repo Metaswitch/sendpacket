@@ -185,18 +185,8 @@ impl PackageHeader for Ether {
         let mut ether_buffer = vec![0u8; ether_buffer_len];
         let mut ether_packet = MutableEthernetPacket::new(&mut ether_buffer).unwrap();
 
-        ether_packet.set_source(MacAddr::new(self.src_mac.address[0],
-                                             self.src_mac.address[1],
-                                             self.src_mac.address[2],
-                                             self.src_mac.address[3],
-                                             self.src_mac.address[4],
-                                             self.src_mac.address[5]));
-        ether_packet.set_destination(MacAddr::new(self.dst_mac.address[0],
-                                                  self.dst_mac.address[1],
-                                                  self.dst_mac.address[2],
-                                                  self.dst_mac.address[3],
-                                                  self.dst_mac.address[4],
-                                                  self.dst_mac.address[5]));
+        ether_packet.set_source(self.src_mac.to_mac_addr());
+        ether_packet.set_destination(self.dst_mac.to_mac_addr());
 
         ether_packet.set_ethertype(EtherTypes::Ipv4);
 
@@ -381,6 +371,16 @@ impl Default for Mac {
     }
 }
 
+impl Mac {
+    fn to_mac_addr(&self) -> MacAddr {
+        MacAddr::new(self.address[0],
+                     self.address[1],
+                     self.address[2],
+                     self.address[3],
+                     self.address[4],
+                     self.address[5])
+    }
+}
 
 ///
 /// Tests
