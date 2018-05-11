@@ -245,10 +245,27 @@ pub struct L3 {
 
 impl PackageHeader<IpNextHeaderProtocol> for L3 {
     fn build_header(&self, payload: &[u8], next_header: IpNextHeaderProtocol) -> Vec<u8> {
-        let l3_packet: Vec<u8> = vec![];
-        // Insert RLC function here for L3 packets
+        let l3_len = payload.len() + 20;
+        let l3_buffer = vec![0u8; l3_len];
+        let mut l3_packet = MutableIpv4Packet::owned(l3_buffer).unwrap();
 
-        self.l2.build_header(&l3_packet, self.ip.ether_type())
+        l3_packet.set_version(4);
+        l3_packet.set_header_length(5);
+        l3_packet.set_total_length(l3_len as u16);
+        l3_packet.set_ttl(1);
+        l3_packet.set_next_level_protocol(next_header);
+
+        l3_packet.set_source(self.ip.src.parse().unwrap());
+        l3_packet.set_destination(self.ip.dst.parse().unwrap());
+        l3_packet.set_payload(payload);
+
+        let checksum = {
+            let imm_packet = l3_packet.to_immutable();
+            ipv4::checksum(&imm_packet)
+        };
+
+        l3_packet.set_checksum(checksum);
+        self.l2.build_header(l3_packet.packet(), self.ip.ether_type())
     }
 }
 
@@ -308,7 +325,8 @@ impl PackageHeader<()> for L3Over<Tcp> {
 impl PackageHeader<()> for L3Over<Udp> {
     fn build_header(&self, payload: &[u8], _extra: ()) -> Vec<u8> {
         let l3_over_udp_packet: Vec<u8> = vec![];
-        // Insert RLC function here for L3 over TCP packets
+
+
 
         self.l3.build_header(&l3_over_udp_packet, IpNextHeaderProtocols::Udp)
     }
