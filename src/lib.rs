@@ -7,10 +7,17 @@ extern crate ipnetwork;
 extern crate pnet;
 
 use ipnetwork::IpNetwork;
-use pnet::packet::Packet;
+use pnet::datalink::{Channel, NetworkInterface, MacAddr, DataLinkReceiver, DataLinkSender};
+use pnet::packet::{MutablePacket, Packet};
+use pnet::packet::arp::{ArpHardwareTypes, ArpOperation, ArpOperations};
 use pnet::packet::ethernet::{EtherType, EtherTypes};
 use pnet::packet::ethernet::MutableEthernetPacket;
-use pnet::datalink::{Channel, NetworkInterface, MacAddr, DataLinkReceiver, DataLinkSender};
+use pnet::packet::ip::{self, IpNextHeaderProtocol, IpNextHeaderProtocols};
+use pnet::packet::ipv4::{self, MutableIpv4Packet};
+use pnet::packet::udp::{ipv4_checksum, MutableUdpPacket};
+
+use std::fs;
+use std::io::Read;
 use std::num::ParseIntError;
 use std::ops::Div;
 use pnet::datalink;
@@ -45,6 +52,17 @@ macro_rules! mpls {
 macro_rules! tcp {
   ( $( $k:ident=$v:expr ),* ) => {{
     Tcp{
+      $(
+        $k: $v.into(),
+      )*
+    }
+  }};
+}
+
+#[macro_export]
+macro_rules! udp {
+  ( $( $k:ident=$v:expr ),* ) => {{
+    Udp{
       $(
         $k: $v.into(),
       )*
@@ -117,6 +135,9 @@ pub struct Ether {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct EtherWrapper(Ether);
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct MPLS {
     pub label: u32,
 }
@@ -150,10 +171,7 @@ impl EtherTypeable for MPLS {
 
 impl EtherTypeable for Ip {
     fn ether_type(&self) -> EtherType {
-        match self.src.parse::<IpNetwork>().unwrap() {
-            IpNetwork::V4(_) => EtherTypes::Ipv4,
-            IpNetwork::V6(_) => EtherTypes::Ipv6,
-        }
+        EtherTypes::Ipv4
     }
 }
 
@@ -192,8 +210,8 @@ pub struct L2 {
     mpls_labels: Vec<MPLS>,
 }
 
-impl PackageHeader for Ether {
-    fn build_header(&self, payload: &[u8]) -> Vec<u8> {
+impl Ether {
+    fn build_header_inner(&self, payload: &[u8], ether_type: Option<EtherType>) -> Vec<u8> {
         let ether_buffer_len = payload.len() + 38; // 42 if with 802.1Q tags
         let mut ether_buffer = vec![0u8; ether_buffer_len];
         let mut ether_packet = MutableEthernetPacket::new(&mut ether_buffer).unwrap();
@@ -201,18 +219,33 @@ impl PackageHeader for Ether {
         ether_packet.set_source(self.src_mac.to_mac_addr());
         ether_packet.set_destination(self.dst_mac.to_mac_addr());
 
-//        ether_packet.set_ethertype(EtherTypes::);
+        if let Some(t) = ether_type {
+            ether_packet.set_ethertype(t)
+        }
+
         ether_packet.set_payload(payload);
         ether_packet.packet().to_vec()
     }
 }
 
-impl PackageHeader for L2 {
-    fn build_header(&self, payload: &[u8]) -> Vec<u8> {
+impl PackageHeader<EtherType> for Ether {
+    fn build_header(&self, payload: &[u8], ether_type: EtherType) -> Vec<u8> {
+        self.build_header_inner(payload, Some(ether_type))
+    }
+}
+
+impl PackageHeader<()> for Ether {
+    fn build_header(&self, payload: &[u8], _extra: ()) -> Vec<u8> {
+        self.build_header_inner(payload, None)
+    }
+}
+
+impl PackageHeader<EtherType> for L2 {
+    fn build_header(&self, payload: &[u8], ether_type: EtherType) -> Vec<u8> {
         let l2_packet: Vec<u8> = vec![];
         // Insert RLC function here for L2 packets
 
-        self.ether.build_header(&l2_packet)
+        self.ether.build_header(&l2_packet, ether_type)
     }
 }
 
@@ -242,12 +275,29 @@ pub struct L3 {
     ip: Ip, // if you allow more types here, they must implement EtherTypeable
 }
 
-impl PackageHeader for L3 {
-    fn build_header(&self, payload: &[u8]) -> Vec<u8> {
-        let l3_packet: Vec<u8> = vec![];
-        // Insert RLC function here for L3 packets
+impl PackageHeader<IpNextHeaderProtocol> for L3 {
+    fn build_header(&self, payload: &[u8], next_header: IpNextHeaderProtocol) -> Vec<u8> {
+        let l3_len = payload.len() + 20;
+        let l3_buffer = vec![0u8; l3_len];
+        let mut l3_packet = MutableIpv4Packet::owned(l3_buffer).unwrap();
 
-        self.l2.build_header(&l3_packet)
+        l3_packet.set_version(4);
+        l3_packet.set_header_length(5);
+        l3_packet.set_total_length(l3_len as u16);
+        l3_packet.set_ttl(1);
+        l3_packet.set_next_level_protocol(next_header);
+
+        l3_packet.set_source(self.ip.src.parse().unwrap());
+        l3_packet.set_destination(self.ip.dst.parse().unwrap());
+        l3_packet.set_payload(payload);
+
+        let checksum = {
+            let imm_packet = l3_packet.to_immutable();
+            ipv4::checksum(&imm_packet)
+        };
+
+        l3_packet.set_checksum(checksum);
+        self.l2.build_header(l3_packet.packet(), self.ip.ether_type())
     }
 }
 
@@ -282,17 +332,53 @@ pub trait Transport {}
 impl Transport for Tcp {}
 
 #[derive(Clone, Debug, PartialEq, Eq, new)]
+pub struct Udp {
+    pub src_port: u16,
+    pub dst_port: u16,
+}
+
+impl Transport for Udp {}
+
+#[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct L3Over<T: Transport> {
     l3: L3,
     transport: T,
 }
 
-impl PackageHeader for L3Over<Tcp> {
-    fn build_header(&self, payload: &[u8]) -> Vec<u8> {
+impl PackageHeader<()> for L3Over<Tcp> {
+    fn build_header(&self, payload: &[u8], _extra: ()) -> Vec<u8> {
         let l3_over_tcp_packet: Vec<u8> = vec![];
         // Insert RLC function here for L3 over TCP packets
+        panic!("At the disco");
+        self.l3.build_header(&l3_over_tcp_packet, IpNextHeaderProtocols::Tcp)
+    }
+}
 
-        self.l3.build_header(&l3_over_tcp_packet)
+
+impl PackageHeader<()> for L3Over<Udp> {
+    fn build_header(&self, payload: &[u8], _extra: ()) -> Vec<u8> {
+        let l3_over_udp_packet: Vec<u8> = vec![];
+
+
+        let udp_len = payload.len() + 8;
+        let mut udp_buffer = vec![0u8; udp_len];
+        let mut udp_packet = MutableUdpPacket::new(&mut udp_buffer).unwrap();
+
+        udp_packet.set_source(self.transport.src_port);
+        udp_packet.set_destination(self.transport.dst_port);
+        udp_packet.set_length(udp_len as u16);
+        udp_packet.set_payload(payload);
+
+        // Checksum is optional for UDP
+        //    let checksum = {
+        //       ipv4_checksum(upd_packet.to_immutable(), self.l3.ip.src.parse().unwrap(), self.l3.ip.dst.parse().unwrap())
+        //       let imm_packet = l3_packet.to_immutable();
+        //       ipv4::checksum(&imm_packet)
+        //    };
+
+        udp_packet.set_checksum(0);
+
+        self.l3.build_header(&udp_packet.packet(), IpNextHeaderProtocols::Udp)
     }
 }
 
@@ -304,19 +390,19 @@ impl<T: Transport> Div<T> for L3 {
     }
 }
 
-pub trait PackageHeader {
-    fn build_header(&self, payload: &[u8]) -> Vec<u8>;
+pub trait PackageHeader<ExtraInfo> {
+    fn build_header(&self, payload: &[u8], ether_type: ExtraInfo) -> Vec<u8>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, new)]
-pub struct Package<H: PackageHeader> {
+pub struct Package<H: PackageHeader<()>> {
     header: H,
     payload: Payload,
 }
 
-impl<H: PackageHeader> Package<H> {
-    pub fn build_packet(&self) -> Vec<u8> {
-        self.header.build_header(&self.payload.payload)
+impl<H: PackageHeader<()>> Package<H> {
+    fn build_packet(&self) -> Vec<u8> {
+        self.header.build_header(&self.payload.payload, ())
     }
 
     pub fn send(&self, session: &DataLinkSession) {
@@ -362,9 +448,9 @@ macro_rules! payload_div {
 }
 
 payload_div!(Ether);
-payload_div!(L2);
-payload_div!(L3);
-payload_div!(L3Over<Tcp>);
+//payload_div!(L2);
+//payload_div!(L3);
+payload_div!(L3Over<Udp>);
 
 impl FromStr for Mac {
     type Err = ParseIntError;
@@ -460,4 +546,3 @@ mod tests {
                ether!(src_mac = [10,1,1,1,1,1], dst_mac = [10,1,1,1,1,2]) / ip!(src="", dst="hello")/tcp!(dport=0u16, sport=1u16));
   }
 }
-

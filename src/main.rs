@@ -22,7 +22,11 @@ fn main() {
         .expect("Usage: ./hack12 <interface name>");
 
     let session = DataLinkSession::new(&if_name);
-    let packet = ether!(src_mac = [10,1,1,1,1,1], dst_mac = [10,1,1,1,1,2]) / payload!("hello".to_string().into_bytes());
+
+    let packet = ether!(src_mac = [10, 1, 1, 1, 1, 1], dst_mac = [10, 1, 1, 1, 1, 2]) /
+        ip!(dst = "127.0.0.1", src = "10.8.0.1") /
+        udp!(src_port = 1u16, dst_port = 2u16) /
+        payload!("hello".to_string().into_bytes());
 
     println!("Made packet {:#?}", packet);
 
