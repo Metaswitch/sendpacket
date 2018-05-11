@@ -1,18 +1,10 @@
 [package]
-name = "sendpacket"
+name = "hack12"
 version = "0.1.0"
-authors = [
-  "Alex Lloyd <alex.lloyd@metaswitch.com>",
-  "Blake Hawkins <blake.hawkins@metaswitch.com>",
-  "Jaime Valdemoros Gomez <jaime.valdemorosgomez@metaswitch.com>",
-  "James Turner <james.turner@metaswitch.com>",
-  "Ryan Collingham <ryan.collingham@metaswitch.com>",
-  "Sophie Stratton <sophie.stratton@metaswitch.com>",
-  "Wojciech Kozlowski <wojciech.kozlowski@metaswitch.com>",
-]
+authors = ["Wojciech Kozlowski <wojciech.kozlowski@metaswitch.com>"]
 
 [lib]
-name = "lib_sendpacket"
+name = "lib_hack12"
 path = "src/lib.rs"
 
 [dependencies]

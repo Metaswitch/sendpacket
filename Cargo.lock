@@ -32,6 +32,15 @@ version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "hack12"
+version = "0.1.0"
+dependencies = [
+ "derive-new 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ipnetwork 0.12.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnet 0.21.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "ipnetwork"
 version = "0.12.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -200,15 +209,6 @@ dependencies = [
 name = "rustc-serialize"
 version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "sendpacket"
-version = "0.1.0"
-dependencies = [
- "derive-new 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "ipnetwork 0.12.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "pnet 0.21.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "syn"
