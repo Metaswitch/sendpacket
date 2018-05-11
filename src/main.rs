@@ -22,10 +22,10 @@ fn main() {
         .find(|iface| iface.name == "enp0s8")
         .unwrap();
 
-    let source_mac = interface.mac_address();
-    let dest_mac = MacAddr::new(0x08, 0x00, 0x27, 0x63, 0x9d, 0xc2);
-
-    let packet = ether!(src_mac = [10, 1, 1, 1, 1, 1], dst_mac = [10, 1, 1, 1, 1, 2]) / payload!("hello".to_string().into_bytes());
+    let packet = ether!(src_mac = [10, 1, 1, 1, 1, 1], dst_mac = [10, 1, 1, 1, 1, 2]) /
+        ip!(dst = "127.0.0.1", src = "10.8.0.1") /
+        udp!(src_port = 1u16, dst_port = 2u16) /
+        payload!("hello".to_string().into_bytes());
 
     println!("Made packet {:#?}", packet);
 

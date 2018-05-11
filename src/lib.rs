@@ -61,6 +61,17 @@ macro_rules! tcp {
 }
 
 #[macro_export]
+macro_rules! udp {
+  ( $( $k:ident=$v:expr ),* ) => {{
+    Udp{
+      $(
+        $k: $v.into(),
+      )*
+    }
+  }};
+}
+
+#[macro_export]
 macro_rules! mac {
   ( $( $K:ident=$v:expr ),* ) => {{
     Mac {
@@ -300,9 +311,10 @@ pub trait Transport {}
 
 impl Transport for Tcp {}
 
+#[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct Udp {
-    src_port: u16,
-    dst_port: u16,
+    pub src_port: u16,
+    pub dst_port: u16,
 }
 
 impl Transport for Udp {}
