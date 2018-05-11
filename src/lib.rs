@@ -7,18 +7,12 @@ extern crate ipnetwork;
 extern crate pnet;
 
 use ipnetwork::IpNetwork;
-use pnet::packet::{MutablePacket, Packet};
-use pnet::packet::arp::{ArpHardwareTypes, ArpOperation, ArpOperations};
+use pnet::packet::Packet;
 use pnet::packet::ethernet::{EtherType, EtherTypes};
 use pnet::packet::ethernet::MutableEthernetPacket;
-use pnet::packet::ip;
-use pnet::packet::ipv4;
 use pnet::datalink::{Channel, NetworkInterface, MacAddr};
-use std::fs;
-use std::io::Read;
 use std::num::ParseIntError;
 use std::ops::Div;
-use std::path::Path;
 use pnet::datalink;
 use std::str::FromStr;
 
