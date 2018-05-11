@@ -19,8 +19,12 @@ use std::io::Read;
 use std::num::ParseIntError;
 use std::ops::Div;
 use std::path::Path;
+<<<<<<< HEAD
+use std::marker::PhantomData;
 use pnet::datalink;
+=======
 use std::str::FromStr;
+>>>>>>> jvg/send
 
 ///
 /// Macros
@@ -347,6 +351,7 @@ impl FromStr for Mac {
 
 impl Default for Mac {
     fn default() -> Mac {
+<<<<<<< HEAD
         // TODO: currently just takes the first network interface it sees. What should it actually use???
         let interface = datalink::interfaces()
             .into_iter()
@@ -354,6 +359,24 @@ impl Default for Mac {
             .expect("Could not find any interfaces");
         let mac_addr = interface.mac.unwrap();
         Mac {address: [mac_addr.0, mac_addr.1, mac_addr.2, mac_addr.3, mac_addr.4, mac_addr.5]}
+=======
+        let net = Path::new("/sys/class/net");
+        let entry = fs::read_dir(net).expect("Error");
+
+        let ifaces = entry.filter_map(|p| p.ok())
+                          .map(|p| p.path().file_name().expect("Error").to_os_string())
+                          .filter_map(|s| s.into_string().ok())
+                          .collect::<Vec<String>>();
+        println!("Available interfaces: {:?}", ifaces);
+
+        // TODO: currently just takes the first network interface it sees... What should it actually use???
+        let iface = net.join(ifaces[0].as_str()).join("address");
+        let mut f = fs::File::open(iface).expect("Failed");
+        let mut macaddr = String::new();
+        f.read_to_string(&mut macaddr).expect("Error");
+
+        macaddr.trim().parse().unwrap()
+>>>>>>> jvg/send
     }
 }
 
@@ -404,5 +427,29 @@ mod tests {
     assert_eq!(Ether {src_mac: [10,1,1,1,1,1].into(), dst_mac: [10,1,1,1,1,2].into()} / Ip {src: "".into(), dst: "hello".into()} / Tcp {dport: 0u16, sport: 1u16},
                ether!(src_mac = [10,1,1,1,1,1], dst_mac = [10,1,1,1,1,2]) / ip!(src="", dst="hello")/tcp!(dport=0u16, sport=1u16));
   }
+}
+
+mod builder {
+    use L2;
+    use Ip;
+    use Tcp;
+
+    fn build_ethernet_pkt(ether: L2, payload: [u8; 1024]) -> [u8; 1024] {
+        // TODO implement!
+        panic!("Not implemented");
+        payload
+    }
+
+    fn build_ip_pkt(ip: Ip, ethernet_pkt: [u8; 1024]) -> [u8; 1024] {
+        // TODO implement!
+        panic!("Not implemented");
+        ethernet_pkt
+    }
+
+    fn build_tcp_pkt(tcp: Tcp, ip_pkt: [u8; 1024]) -> [u8; 1024] {
+        // TODO implement!
+        panic!("Not implemented");
+        ip_pkt
+    }
 }
 
