@@ -172,10 +172,7 @@ impl EtherTypeable for MPLS {
 
 impl EtherTypeable for Ip {
     fn ether_type(&self) -> EtherType {
-        match self.src.parse::<IpNetwork>().unwrap() {
-            IpNetwork::V4(_) => EtherTypes::Ipv4,
-            IpNetwork::V6(_) => EtherTypes::Ipv6,
-        }
+        EtherTypes::Ipv4
     }
 }
 
