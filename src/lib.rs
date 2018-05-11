@@ -274,7 +274,7 @@ impl FromStr for Mac {
         let octets: Vec<&str> = s.split(":").collect();
         assert_eq!(octets.len(), 6);
         let octets = octets.iter()
-            .map(|p|u8::from_str_radix(p, 16))
+            .map(|p| u8::from_str_radix(p, 16))
             .collect::<Result<Vec<u8>, Self::Err>>();
         println!("Mac octets: {:?}", octets);
 
@@ -284,7 +284,7 @@ impl FromStr for Mac {
                 let mut oct_array: [u8; 6] = [0; 6];
                 oct_array.clone_from_slice(&octs);
 
-                Ok(Mac {address: oct_array})
+                Ok(Mac { address: oct_array })
             }
         }
     }
