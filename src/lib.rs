@@ -13,7 +13,7 @@ use pnet::packet::ethernet::{EtherType, EtherTypes};
 use pnet::packet::ethernet::MutableEthernetPacket;
 use pnet::packet::ip;
 use pnet::packet::ipv4;
-use pnet::datalink::MacAddr;
+use pnet::datalink::{Channel, NetworkInterface, MacAddr};
 use std::fs;
 use std::io::Read;
 use std::num::ParseIntError;
@@ -299,6 +299,32 @@ pub struct Package<H: PackageHeader> {
 impl<H: PackageHeader> Package<H> {
     pub fn build_packet(&self) -> Vec<u8> {
         self.header.build_header(&self.payload.payload)
+    }
+
+    pub fn send(&self, interface: &NetworkInterface) {
+        let (mut tx, mut rx) = match pnet::datalink::channel(&interface, Default::default()) {
+            Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
+            Ok(_) => panic!("Unknown channel type"),
+            Err(e) => panic!("Error happened {}", e),
+        };
+        tx.send_to(&self.build_packet(), None);
+    }
+
+    pub fn recv(&self, interface: &NetworkInterface) -> Vec<u8> {
+        let (mut tx, mut rx) = match pnet::datalink::channel(&interface, Default::default()) {
+            Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
+            Ok(_) => panic!("Unknown channel type"),
+            Err(e) => panic!("Error happened {}", e),
+        };
+
+        match rx.next() {
+            Ok(packet) => {
+                packet.to_vec()
+            },
+            Err(e) => {
+                panic!("Error receiving packet: {}", e);
+            }
+        }
     }
 }
 

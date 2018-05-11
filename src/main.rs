@@ -29,27 +29,11 @@ fn main() {
 
     println!("Made packet {:#?}", packet);
 
-    let (mut tx, mut rx) = match pnet::datalink::channel(&interface, Default::default()) {
-        Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
-        Ok(_) => panic!("Unknown channel type"),
-        Err(e) => panic!("Error happened {}", e),
-    };
-
-    println!("Got channels");
-
-    tx.send_to(&packet.build_packet(), None);
-
+    packet.send(&interface);
     println!("Sent");
 
-    match rx.next() {
-        Ok(packet) => {
-            println!("Received: {:?}", packet);
-        },
-        Err(_) => {
-            panic!("At the disco");
-        }
-    }
-
+    let rcv_pkt = packet.recv(&interface);
+    println!("Received: {:?}", rcv_pkt);
 }
 
 //fn send_l2_packet(interface: NetworkInterface,
