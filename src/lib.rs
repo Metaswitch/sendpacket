@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 ///
 /// Macros
 ///
+#[macro_export]
 macro_rules! ip {
   ( $( $k:ident=$v:expr ),* ) => {{
     Ip {
@@ -28,6 +29,7 @@ macro_rules! ip {
   }};
 }
 
+#[macro_export]
 macro_rules! mpls {
   ( $( $k:ident=$v:expr ),* ) => {{
     MPLS {
@@ -38,10 +40,12 @@ macro_rules! mpls {
   }};
 }
 
+#[macro_export]
 macro_rules! tcp {
   () => {{ Tcp {} }};
 }
 
+#[macro_export]
 macro_rules! mac {
   ( $( $K:ident=$v:expr ),* ) => {{
     Mac {
