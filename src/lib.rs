@@ -42,7 +42,13 @@ macro_rules! mpls {
 
 #[macro_export]
 macro_rules! tcp {
-  () => {{ Tcp {} }};
+  ( $( $k:ident=$v:expr ),* ) => {{
+    Tcp{
+      $(
+        $k: $v.into(),
+      )*
+    }
+  }};
 }
 
 #[macro_export]
@@ -55,6 +61,17 @@ macro_rules! mac {
       ..Default::default()
     }
   }};
+}
+
+#[macro_export]
+macro_rules! l2 {
+    ( $( $k:ident=$v:expr ),* ) => {{
+        L2 {
+            $(
+                $k: $v.into(),
+            )*
+        }
+    }};
 }
 
 
@@ -89,13 +106,17 @@ pub struct L3<Inner: InsideL3> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ip {
+    src: String,
     dst: String
 }
 
 pub trait Transport {}
 
 #[derive(Clone, Debug, PartialEq, Eq, new)]
-pub struct Tcp;
+pub struct Tcp {
+    dport: u16,
+    sport: u16,
+}
 
 impl Transport for Tcp {}
 
