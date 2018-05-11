@@ -6,20 +6,20 @@ extern crate derive_new;
 extern crate ipnetwork;
 extern crate pnet;
 
-use std::ops::Div;
-use std::str::FromStr;
-use std::num::ParseIntError;
+use ipnetwork::IpNetwork;
+use pnet::packet::{MutablePacket, Packet};
+use pnet::packet::arp::{ArpHardwareTypes, ArpOperation, ArpOperations};
+use pnet::packet::ethernet::EtherTypes;
+use pnet::packet::ethernet::MutableEthernetPacket;
+use pnet::packet::ip;
+use pnet::packet::ipv4;
 use std::fs;
 use std::io::Read;
+use std::net::Ip;
+use std::num::ParseIntError;
+use std::ops::Div;
 use std::path::Path;
-
-use ipnetwork::IpNetwork;
-
-use pnet::packet::ethernet::MutableEthernetPacket;
-use pnet::packet::ipv4;
-use pnet::packet::ethernet::EtherTypes;
-use pnet::packet::{Packet, MutablePacket};
-use pnet::packet::arp::{ArpHardwareTypes, ArpOperations, ArpOperation};
+use std::str::FromStr;
 
 
 ///
@@ -245,7 +245,7 @@ impl<T: Transport> Div<T> for L3 {
 }
 
 impl L3Over<Tcp> {
-    fn mutable_packet(&self, payload: Vec<u8>) -> MutablePacket {
+    fn mutable_packet(&self, payload: Vec<u8>) -> Box<MutablePacket> {
         let mut ethernet_buffer = [0u8; 42];
         let mut ethernet_packet = MutableEthernetPacket::new(&mut ethernet_buffer).unwrap();
 
@@ -253,6 +253,23 @@ impl L3Over<Tcp> {
         ethernet_packet.set_source(self.l3.l2.ether.dst_mac);
         ethernet_packet.set_ethertype(self.l3.ip.ether_type());
 
+        let ipv4_struct = ipv4::Ipv4 {
+            version: 4,
+            header_length: 5,
+            dscp: 0,
+            ecn: 0,
+            total_length: 127,
+            identification: 0,
+            flags: 0,
+            fragment_offset: 0,
+            ttl: 1,
+            next_level_protocol: ip::IpNextHeaderProtocols::Tcp,
+            checksum: 123,
+            source: self.l3.ip.src.parse(),
+        };
+
+
+        let mut ip_packet = ipv4::Ipv4Packet::new();
 
 
         let mut arp_buffer = [0u8; 28];
@@ -353,12 +370,12 @@ impl Default for Mac {
 ///
 
 mod tests {
-  use Ether;
-  use Ip;
-  use Tcp;
-  use Mac;
+    use Ether;
+    use Ip;
+    use Mac;
+    use Tcp;
 
-  #[test]
+    #[test]
   fn macro_ip_works() {
     assert_eq!(Ip {src: "".into(), dst: "hello".into()}, ip!(src="", dst="hello"));
   }
