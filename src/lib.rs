@@ -258,14 +258,17 @@ impl L3Over<Tcp> {
             header_length: 5,
             dscp: 0,
             ecn: 0,
-            total_length: 127,
+            total_length: 127, // todo
             identification: 0,
             flags: 0,
             fragment_offset: 0,
             ttl: 1,
             next_level_protocol: ip::IpNextHeaderProtocols::Tcp,
-            checksum: 123,
-            source: self.l3.ip.src.parse(),
+            checksum: 123, // todo
+            source: self.l3.ip.src.parse().unwrap(),
+            destination: self.l3.ip.dst.parse().unwrap(),
+            options: vec![],
+            payload: self.transport.make_payload(payload)
         };
 
 
@@ -360,7 +363,7 @@ impl Default for Mac {
         let mut macaddr = String::new();
         f.read_to_string(&mut macaddr).expect("Error");
 
-        Mac::from_str(&macaddr.trim()).unwrap()
+        macaddr.trim().parse().unwrap()
     }
 }
 
