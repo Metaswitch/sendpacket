@@ -6,12 +6,20 @@ extern crate derive_new;
 extern crate ipnetwork;
 extern crate pnet;
 
-use std::ops::Div;
-use std::str::FromStr;
-use std::num::ParseIntError;
+use ipnetwork::IpNetwork;
+use pnet::packet::{MutablePacket, Packet};
+use pnet::packet::arp::{ArpHardwareTypes, ArpOperation, ArpOperations};
+use pnet::packet::ethernet::EtherTypes;
+use pnet::packet::ethernet::MutableEthernetPacket;
+use pnet::packet::ip;
+use pnet::packet::ipv4;
 use std::fs;
 use std::io::Read;
+use std::net::Ip;
+use std::num::ParseIntError;
+use std::ops::Div;
 use std::path::Path;
+use std::str::FromStr;
 
 use pnet::datalink::{Channel, NetworkInterface, MacAddr};
 use pnet::packet::ethernet::MutableEthernetPacket;
@@ -141,6 +149,25 @@ pub struct Payload {
     pub payload: Vec<u8>,
 }
 
+trait EtherTypeable {
+    fn ether_type(&self) -> EtherType;
+}
+
+impl EtherTypeable for MPLS {
+    fn ether_type(&self) -> EtherType {
+        EtherTypes::Mpls
+    }
+}
+
+impl EtherTypeable for Ip {
+    fn ether_type(&self) -> EtherType {
+        match self.src.parse::<IpNetwork>().unwrap() {
+            IpNetwork::V4(_) => EtherTypes::Ipv4,
+            IpNetwork::V6(_) => EtherTypes::Ipv6,
+        }
+    }
+}
+
 
 ///
 /// Encapsulation types
@@ -209,7 +236,7 @@ impl Div<MPLS> for L2 {
 #[derive(Clone, Debug, PartialEq, Eq, new)]
 pub struct L3 {
     l2: L2,
-    ip: Ip,
+    ip: Ip, // if you allow more types here, they must implement EtherTypeable
 }
 
 impl PackageHeader for L3 {
@@ -317,7 +344,7 @@ impl FromStr for Mac {
         let octets: Vec<&str> = s.split(":").collect();
         assert_eq!(octets.len(), 6);
         let octets = octets.iter()
-            .map(|p|u8::from_str_radix(p, 16))
+            .map(|p| u8::from_str_radix(p, 16))
             .collect::<Result<Vec<u8>, Self::Err>>();
         println!("Mac octets: {:?}", octets);
 
@@ -327,7 +354,7 @@ impl FromStr for Mac {
                 let mut oct_array: [u8; 6] = [0; 6];
                 oct_array.clone_from_slice(&octs);
 
-                Ok(Mac {address: oct_array})
+                Ok(Mac { address: oct_array })
             }
         }
     }
@@ -344,13 +371,13 @@ impl Default for Mac {
                           .collect::<Vec<String>>();
         println!("Available interfaces: {:?}", ifaces);
 
-        // TODO: currently just takes the first network interface it sees. What should it actually use???
+        // TODO: currently just takes the first network interface it sees... What should it actually use???
         let iface = net.join(ifaces[0].as_str()).join("address");
         let mut f = fs::File::open(iface).expect("Failed");
         let mut macaddr = String::new();
         f.read_to_string(&mut macaddr).expect("Error");
 
-        Mac::from_str(&macaddr.trim()).unwrap()
+        macaddr.trim().parse().unwrap()
     }
 }
 
@@ -359,20 +386,20 @@ impl Default for Mac {
 /// Tests
 ///
 
-#[cfg(test)]
 mod tests {
-  use Ip;
-  use Tcp;
-  use Mac;
+    use Ether;
+    use Ip;
+    use Mac;
+    use Tcp;
 
-  #[test]
+    #[test]
   fn macro_ip_works() {
-    assert_eq!(Ip {dst: "hello".into()}, ip!(dst="hello"));
+    assert_eq!(Ip {src: "".into(), dst: "hello".into()}, ip!(src="", dst="hello"));
   }
 
   #[test]
   fn macro_tcp_works() {
-    assert_eq!(Tcp {}, tcp!());
+    assert_eq!(Tcp {dport: 0, sport: 1}, tcp!(dport=0u16, sport=1u16));
   }
 
   #[test]
@@ -388,8 +415,8 @@ mod tests {
 
   #[test]
   fn macro_tcp_ip_div_fv() {
-    assert_eq!(Ip {dst: "hello".into()} / Tcp {},
-               ip!(dst="hello")/tcp!());
+    assert_eq!(Ether {src_mac: [10,1,1,1,1,1].into(), dst_mac: [10,1,1,1,1,2].into()} / Ip {src: "".into(), dst: "hello".into()} / Tcp {dport: 0u16, sport: 1u16},
+               ether!(src_mac = [10,1,1,1,1,1], dst_mac = [10,1,1,1,1,2]) / ip!(src="", dst="hello")/tcp!(dport=0u16, sport=1u16));
   }
 }
 
