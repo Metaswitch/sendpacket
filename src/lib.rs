@@ -296,20 +296,20 @@ impl Default for Mac {
 /// Tests
 ///
 
-#[cfg(test)]
 mod tests {
+  use Ether;
   use Ip;
   use Tcp;
   use Mac;
 
   #[test]
   fn macro_ip_works() {
-    assert_eq!(Ip {dst: "hello".into()}, ip!(dst="hello"));
+    assert_eq!(Ip {src: "".into(), dst: "hello".into()}, ip!(src="", dst="hello"));
   }
 
   #[test]
   fn macro_tcp_works() {
-    assert_eq!(Tcp {}, tcp!());
+    assert_eq!(Tcp {dport: 0, sport: 1}, tcp!(dport=0u16, sport=1u16));
   }
 
   #[test]
@@ -325,7 +325,7 @@ mod tests {
 
   #[test]
   fn macro_tcp_ip_div_fv() {
-    assert_eq!(Ip {dst: "hello".into()} / Tcp {},
-               ip!(dst="hello")/tcp!());
+    assert_eq!(Ether {src_mac: [10,1,1,1,1,1].into(), dst_mac: [10,1,1,1,1,2].into()} / Ip {src: "".into(), dst: "hello".into()} / Tcp {dport: 0u16, sport: 1u16},
+               ether!(src_mac = [10,1,1,1,1,1], dst_mac = [10,1,1,1,1,2]) / ip!(src="", dst="hello")/tcp!(dport=0u16, sport=1u16));
   }
 }
